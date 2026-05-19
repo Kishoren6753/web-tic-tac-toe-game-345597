@@ -13,30 +13,30 @@ describe("Game UI interactions", () => {
   it("starts with Turn: X and alternates turns on valid moves", () => {
     render(<Game />);
 
-    expect(screen.getByText("Turn: X")).toBeInTheDocument();
+    expect(screen.getByText("Turn: X")).toBeTruthy();
 
     clickSquare(1); // X
-    expect(screen.getByText("Turn: O")).toBeInTheDocument();
+    expect(screen.getByText("Turn: O")).toBeTruthy();
 
     clickSquare(2); // O
-    expect(screen.getByText("Turn: X")).toBeInTheDocument();
+    expect(screen.getByText("Turn: X")).toBeTruthy();
   });
 
   it("prevents overwriting an already-filled square", () => {
     render(<Game />);
 
     clickSquare(1); // X at square 1
-    expect(screen.getByLabelText(/Square 1, X/i)).toBeInTheDocument();
-    expect(screen.getByText("Turn: O")).toBeInTheDocument();
+    expect(screen.getByLabelText(/Square 1, X/i)).toBeTruthy();
+    expect(screen.getByText("Turn: O")).toBeTruthy();
 
     // Attempt overwrite: click square 1 again (should be disabled by Board/Square)
     fireEvent.click(screen.getByLabelText(/Square 1, X/i));
 
     // Turn should remain O (no state change)
-    expect(screen.getByText("Turn: O")).toBeInTheDocument();
+    expect(screen.getByText("Turn: O")).toBeTruthy();
 
     // Square should still be X
-    expect(screen.getByLabelText(/Square 1, X/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Square 1, X/i)).toBeTruthy();
   });
 
   it("announces a winner and stops accepting moves after game over", () => {
@@ -49,13 +49,13 @@ describe("Game UI interactions", () => {
     clickSquare(5); // O
     clickSquare(3); // X => win
 
-    expect(screen.getByText("Winner: X")).toBeInTheDocument();
+    expect(screen.getByText("Winner: X")).toBeTruthy();
 
     // After winner, board is disabled; verify no further move can be made.
     // Square 6 should still be empty and remain empty after click attempt.
-    expect(screen.getByLabelText(/Square 6, empty/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Square 6, empty/i)).toBeTruthy();
     fireEvent.click(screen.getByLabelText(/Square 6, empty/i));
-    expect(screen.getByLabelText(/Square 6, empty/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Square 6, empty/i)).toBeTruthy();
   });
 
   it("Reset Board clears the board and keeps the starting player", () => {
@@ -64,36 +64,36 @@ describe("Game UI interactions", () => {
     // Make a couple of moves first
     clickSquare(1); // X
     clickSquare(2); // O
-    expect(screen.getByLabelText(/Square 1, X/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Square 2, O/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Square 1, X/i)).toBeTruthy();
+    expect(screen.getByLabelText(/Square 2, O/i)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /Reset Board/i }));
 
     // All squares should be empty again; turn should be X (starting player default)
-    expect(screen.getByText("Turn: X")).toBeInTheDocument();
-    expect(screen.getByLabelText(/Square 1, empty/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Square 2, empty/i)).toBeInTheDocument();
+    expect(screen.getByText("Turn: X")).toBeTruthy();
+    expect(screen.getByLabelText(/Square 1, empty/i)).toBeTruthy();
+    expect(screen.getByLabelText(/Square 2, empty/i)).toBeTruthy();
   });
 
   it("New Game (swap starter) swaps the starting player and clears the board", () => {
     render(<Game />);
 
     // Default starting player is X
-    expect(screen.getByText("Turn: X")).toBeInTheDocument();
+    expect(screen.getByText("Turn: X")).toBeTruthy();
 
     // Play one move, then new game should swap starter to O and clear board
     clickSquare(1); // X
-    expect(screen.getByLabelText(/Square 1, X/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Square 1, X/i)).toBeTruthy();
 
     fireEvent.click(
       screen.getByRole("button", { name: /New Game \(swap starter\)/i })
     );
 
-    expect(screen.getByText("Turn: O")).toBeInTheDocument();
-    expect(screen.getByLabelText(/Square 1, empty/i)).toBeInTheDocument();
+    expect(screen.getByText("Turn: O")).toBeTruthy();
+    expect(screen.getByLabelText(/Square 1, empty/i)).toBeTruthy();
 
     // Ensure the next click places O (since it is now the starter)
     clickSquare(1);
-    expect(screen.getByLabelText(/Square 1, O/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Square 1, O/i)).toBeTruthy();
   });
 });
