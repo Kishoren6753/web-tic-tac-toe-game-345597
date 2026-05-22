@@ -6,6 +6,7 @@ import {
     createEmptyBoard,
     formatSquarePosition,
     getAIMove,
+    getHintMove,
     getNextPlayer,
     getWinner,
     isDraw,
@@ -59,6 +60,9 @@ export default function Game() {
     // Mode settings
     const [mode, setMode] = useState(GAME_MODES.LOCAL);
     const [aiDifficulty, setAiDifficulty] = useState(AI_DIFFICULTIES.MEDIUM);
+
+    // Hint UI state: a short message shown after pressing Hint.
+    const [hintMessage, setHintMessage] = useState('');
 
     // In single-player mode: human is always X, AI is always O.
     const humanPlayer = PLAYERS.X;
@@ -126,6 +130,16 @@ export default function Game() {
         return `Turn: ${currentPlayer}`;
     }, [aiDifficulty, currentPlayer, draw, humanPlayer, isSinglePlayer, winnerInfo]);
 
+    // Hint availability rules:
+    // - Only when game is active and viewing the latest history step.
+    // - In AI mode, only allow hint during the human player's turn (avoid hint during AI thinking).
+    const canHint = useMemo(() => {
+        if (gameOver) return false;
+        if (!isViewingLatest) return false;
+        if (isSinglePlayer && currentPlayer !== humanPlayer) return false;
+        return true;
+    }, [currentPlayer, gameOver, humanPlayer, isSinglePlayer, isViewingLatest]);
+
     /**
      * Build the move list UI labels (e.g. "Go to move #3 (X @ r2c1)").
      */
@@ -163,6 +177,7 @@ export default function Game() {
             return trimmed.concat(nextEntry);
         });
         setStepIndex((prev) => prev + 1);
+        setHintMessage('');
     }
 
     function handleSquareClick(index) {
@@ -180,6 +195,23 @@ export default function Game() {
         applyMove(index, currentPlayer);
     }
 
+    function showHint() {
+        if (!canHint) return;
+
+        const move = getHintMove(board, {
+            player: currentPlayer,
+            config,
+        });
+
+        if (typeof move !== 'number') {
+            setHintMessage('No hint available.');
+            return;
+        }
+
+        const pos = formatSquarePosition(move, boardSize);
+        setHintMessage(`Hint: ${currentPlayer} → ${pos}`);
+    }
+
     function jumpToStep(nextIndex) {
         if (isSinglePlayer) return;
         setStepIndex(nextIndex);
@@ -188,11 +220,13 @@ export default function Game() {
     function undoMove() {
         if (!canUndo) return;
         setStepIndex((prev) => Math.max(0, prev - 1));
+        setHintMessage('');
     }
 
     function redoMove() {
         if (!canRedo) return;
         setStepIndex((prev) => Math.min(history.length - 1, prev + 1));
+        setHintMessage('');
     }
 
     function resetBoardKeepStarter() {
@@ -205,6 +239,7 @@ export default function Game() {
             },
         ]);
         setStepIndex(0);
+        setHintMessage('');
         // Allow the next finished round to be counted.
         hasCountedResultRef.current = false;
     }
@@ -222,6 +257,7 @@ export default function Game() {
             },
         ]);
         setStepIndex(0);
+        setHintMessage('');
         // Allow the next finished round to be counted.
         hasCountedResultRef.current = false;
     }
@@ -232,6 +268,7 @@ export default function Game() {
 
     function handleModeChange(nextMode) {
         setMode(nextMode);
+        setHintMessage('');
         // Normalize starter for AI mode so the human (X) starts.
         if (nextMode === GAME_MODES.AI) {
             setStartingPlayer(PLAYERS.X);
@@ -252,6 +289,7 @@ export default function Game() {
     function resetForConfigChange(nextConfig) {
         const normalized = normalizeGameConfig(nextConfig);
         setConfig(normalized);
+        setHintMessage('');
 
         // Reset the round (board size changes invalidate history).
         setHistory([
@@ -481,6 +519,15 @@ export default function Game() {
                     Redo
                 </button>
 
+                <button
+                    type="button"
+                    className="btn btnHint"
+                    onClick={showHint}
+                    disabled={!canHint}
+                >
+                    Hint
+                </button>
+
                 <button type="button" className="btn btnPrimary" onClick={resetBoardKeepStarter}>
                     Reset Board
                 </button>
@@ -490,6 +537,12 @@ export default function Game() {
                 <button type="button" className="btn btnGhost" onClick={resetScores}>
                     Reset Scores
                 </button>
+            </div>
+
+            <div className="hintRow" aria-label="Hint">
+                <p className="hintText" role="status" aria-live="polite">
+                    {hintMessage}
+                </p>
             </div>
 
             <div className="historyPanel" aria-label="Move history">

@@ -153,6 +153,43 @@ describe('Game UI interactions', () => {
         expect(screen.getByText('Turn: X')).toBeTruthy();
     });
 
+    it('Hint suggests a move for the current player in local mode (shows a hint message)', () => {
+        render(<Game />);
+        setModeToLocal();
+
+        const hintBtn = screen.getByRole('button', { name: /Hint/i });
+        expect(hintBtn).toBeEnabled();
+
+        fireEvent.click(hintBtn);
+
+        // The exact square can vary, but it must show "Hint: X → rNcM"
+        expect(screen.getByText(/Hint:\s*X\s*→\s*r\d+c\d+/i)).toBeTruthy();
+    });
+
+    it('Hint is disabled while AI is thinking in single-player mode', () => {
+        jest.useFakeTimers();
+
+        render(<Game />);
+        setModeToAI();
+
+        const hintBtn = screen.getByRole('button', { name: /Hint/i });
+
+        // Human starts; hint is available.
+        expect(hintBtn).toBeEnabled();
+
+        // Human plays X -> AI thinking, hint should be disabled.
+        clickSquare('r1c1');
+        expect(hintBtn).toBeDisabled();
+
+        // After AI plays, it becomes human's turn again, hint should re-enable.
+        act(() => {
+            jest.advanceTimersByTime(400);
+        });
+        expect(hintBtn).toBeEnabled();
+
+        jest.useRealTimers();
+    });
+
     it('time travel via move history works in local mode and truncates future moves when making a new move', () => {
         render(<Game />);
 
