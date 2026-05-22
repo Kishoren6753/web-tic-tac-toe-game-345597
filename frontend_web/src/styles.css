@@ -332,6 +332,78 @@ body {
   line-height: 1.35;
 }
 
+/* Move history */
+.historyPanel {
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 18px;
+  box-shadow: var(--shadowSoft);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.historyHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.historyTitle {
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+
+.historyMeta {
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.historyList {
+  margin: 0;
+  padding: 0 0 0 18px;
+  display: grid;
+  gap: 8px;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.historyItem {
+  margin: 0;
+}
+
+.historyBtn {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  font-weight: 700;
+  color: rgba(17, 24, 39, 0.9);
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease,
+    background 140ms ease;
+}
+
+.historyBtn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(59, 130, 246, 0.45);
+  box-shadow: 0 12px 28px rgba(17, 24, 39, 0.08);
+}
+
+.historyBtn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 5px var(--ring);
+}
+
+.historyBtn.active {
+  background: rgba(59, 130, 246, 0.10);
+  border-color: rgba(59, 130, 246, 0.35);
+}
+
 @media (max-width: 420px) {
   :root {
     --square: 84px;
