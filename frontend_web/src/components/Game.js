@@ -60,6 +60,10 @@ export default function Game() {
     const [mode, setMode] = useState(GAME_MODES.LOCAL);
     const [aiDifficulty, setAiDifficulty] = useState(AI_DIFFICULTIES.MEDIUM);
 
+    // Undo setting (requested feature): allow disabling undo in local 2-player.
+    // In AI mode, undo/time travel is already disabled to avoid inconsistent AI history.
+    const [undoEnabled, setUndoEnabled] = useState(true);
+
     // In single-player mode: human is always X, AI is always O.
     const humanPlayer = PLAYERS.X;
     const aiPlayer = PLAYERS.O;
@@ -91,7 +95,7 @@ export default function Game() {
 
     // In AI mode we disable undo/redo/time travel to avoid inconsistent
     // interactions (AI would need to recompute and potentially alter history).
-    const canUndo = !isSinglePlayer && stepIndex > 0;
+    const canUndo = !isSinglePlayer && undoEnabled && stepIndex > 0;
     const canRedo = !isSinglePlayer && stepIndex < history.length - 1;
 
     const isViewingLatest = stepIndex === history.length - 1;
@@ -407,6 +411,21 @@ export default function Game() {
                         )}
                     </select>
                 </div>
+
+                <div className="modePill" aria-label="Undo setting">
+                    <span className="modeLabel">Undo</span>
+                    <select
+                        className="modeSelect"
+                        value={undoEnabled ? 'On' : 'Off'}
+                        onChange={(e) => setUndoEnabled(e.target.value === 'On')}
+                        aria-label="Enable undo"
+                        disabled={isSinglePlayer}
+                        title={isSinglePlayer ? 'Undo setting is disabled in AI mode' : undefined}
+                    >
+                        <option value={'On'}>On</option>
+                        <option value={'Off'}>Off</option>
+                    </select>
+                </div>
             </div>
 
             <div className="scoreRow" aria-label="Scoreboard">
@@ -469,6 +488,7 @@ export default function Game() {
                     className="btn btnGhost"
                     onClick={undoMove}
                     disabled={!canUndo}
+                    title={!undoEnabled && !isSinglePlayer ? 'Undo is disabled in settings' : undefined}
                 >
                     Undo
                 </button>

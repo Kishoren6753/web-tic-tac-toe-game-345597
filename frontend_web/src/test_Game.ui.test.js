@@ -21,6 +21,12 @@ function setModeToAI() {
     });
 }
 
+function setUndoEnabled(enabled) {
+    fireEvent.change(screen.getByLabelText(/Enable undo/i), {
+        target: { value: enabled ? 'On' : 'Off' },
+    });
+}
+
 describe('Game UI interactions', () => {
     it('renders configuration controls (board size and win length)', () => {
         render(<Game />);
@@ -151,6 +157,38 @@ describe('Game UI interactions', () => {
         fireEvent.click(redo);
         expect(screen.getByLabelText(/Square r1c2, O/i)).toBeTruthy();
         expect(screen.getByText('Turn: X')).toBeTruthy();
+    });
+
+    it('undo can be disabled via toggle (local mode)', () => {
+        render(<Game />);
+
+        setModeToLocal();
+
+        clickSquare('r1c1'); // X
+        clickSquare('r1c2'); // O
+        expect(screen.getByText('Turn: X')).toBeTruthy();
+
+        // Turn off undo and verify the Undo button becomes disabled even though history exists.
+        setUndoEnabled(false);
+
+        const undo = screen.getByRole('button', { name: /Undo/i });
+        expect(undo).toBeDisabled();
+
+        // Attempting to click does nothing.
+        fireEvent.click(undo);
+
+        // Board and turn should remain unchanged.
+        expect(screen.getByLabelText(/Square r1c1, X/i)).toBeTruthy();
+        expect(screen.getByLabelText(/Square r1c2, O/i)).toBeTruthy();
+        expect(screen.getByText('Turn: X')).toBeTruthy();
+
+        // Turn undo back on and verify undo now works.
+        setUndoEnabled(true);
+        expect(undo).not.toBeDisabled();
+
+        fireEvent.click(undo);
+        expect(screen.getByLabelText(/Square r1c2, empty/i)).toBeTruthy();
+        expect(screen.getByText('Turn: O')).toBeTruthy();
     });
 
     it('time travel via move history works in local mode and truncates future moves when making a new move', () => {
