@@ -17,6 +17,7 @@
   --radiusSm: 14px;
   --radiusXs: 12px;
 
+  /* Default square size; board uses --boardSize to compute its overall footprint. */
   --square: 92px;
 }
 
@@ -107,6 +108,50 @@ body {
 .game {
   display: grid;
   gap: 14px;
+}
+
+.modeRow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modePill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(100, 116, 139, 0.08);
+  border: 1px solid rgba(100, 116, 139, 0.18);
+  box-shadow: var(--shadowSoft);
+}
+
+.modeLabel {
+  color: var(--muted);
+  font-weight: 800;
+  font-size: 0.92rem;
+}
+
+.modeSelect {
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.85);
+  padding: 8px 10px;
+  font-weight: 800;
+  color: rgba(17, 24, 39, 0.9);
+}
+
+.modeSelect:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 5px var(--ring);
+}
+
+.modeSelect:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 .scoreRow {
@@ -212,12 +257,26 @@ body {
   place-items: center;
 }
 
+/*
+  Board uses a CSS custom property set from React:
+  --boardSize: number of columns/rows.
+*/
 .board {
-  width: calc(var(--square) * 3 + 18px);
+  --boardSize: 3;
+
+  /* Responsive square sizing:
+     - keep a nice desktop size,
+     - but shrink so even 5x5 fits the shell on smaller screens. */
+  --gap: 9px;
+  --pad: 14px;
+
+  --squareResponsive: min(var(--square), calc((min(100vw, 560px) - 92px - (2 * var(--pad)) - ((var(--boardSize) - 1) * var(--gap))) / var(--boardSize)));
+
+  width: calc(var(--squareResponsive) * var(--boardSize) + ((var(--boardSize) - 1) * var(--gap)) + (2 * var(--pad)));
   display: grid;
-  grid-template-columns: repeat(3, var(--square));
-  gap: 9px;
-  padding: 14px;
+  grid-template-columns: repeat(var(--boardSize), var(--squareResponsive));
+  gap: var(--gap);
+  padding: var(--pad);
   border-radius: 22px;
   background: rgba(255, 255, 255, 0.85);
   border: 1px solid rgba(148, 163, 184, 0.35);
@@ -225,8 +284,8 @@ body {
 }
 
 .square {
-  width: var(--square);
-  height: var(--square);
+  width: var(--squareResponsive);
+  height: var(--squareResponsive);
   border-radius: var(--radiusSm);
   border: 1px solid rgba(148, 163, 184, 0.35);
   background: linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(248, 250, 252, 1));
@@ -321,6 +380,36 @@ body {
   box-shadow: 0 12px 28px rgba(17, 24, 39, 0.08);
 }
 
+.btnHint {
+  background: rgba(6, 182, 212, 0.12);
+  border-color: rgba(6, 182, 212, 0.32);
+  color: rgba(17, 24, 39, 0.92);
+}
+
+.btnHint:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(6, 182, 212, 0.55);
+  box-shadow: 0 12px 28px rgba(6, 182, 212, 0.14);
+}
+
+.btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.hintRow {
+  display: grid;
+  place-items: center;
+  min-height: 22px;
+}
+
+.hintText {
+  margin: 0;
+  color: rgba(17, 24, 39, 0.7);
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
 .help {
   text-align: center;
 }
@@ -330,6 +419,83 @@ body {
   color: var(--muted);
   font-size: 0.92rem;
   line-height: 1.35;
+}
+
+.helpMeta {
+  display: inline-block;
+  margin-left: 6px;
+}
+
+/* Move history */
+.historyPanel {
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 18px;
+  box-shadow: var(--shadowSoft);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.historyHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.historyTitle {
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+
+.historyMeta {
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.historyList {
+  margin: 0;
+  padding: 0 0 0 18px;
+  display: grid;
+  gap: 8px;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.historyItem {
+  margin: 0;
+}
+
+.historyBtn {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  font-weight: 700;
+  color: rgba(17, 24, 39, 0.9);
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease,
+    background 140ms ease;
+}
+
+.historyBtn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(59, 130, 246, 0.45);
+  box-shadow: 0 12px 28px rgba(17, 24, 39, 0.08);
+}
+
+.historyBtn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 5px var(--ring);
+}
+
+.historyBtn.active {
+  background: rgba(59, 130, 246, 0.10);
+  border-color: rgba(59, 130, 246, 0.35);
 }
 
 @media (max-width: 420px) {
@@ -343,5 +509,9 @@ body {
 
   .shell {
     padding: 18px 14px 16px;
+  }
+
+  .mark {
+    font-size: 2.05rem;
   }
 }
