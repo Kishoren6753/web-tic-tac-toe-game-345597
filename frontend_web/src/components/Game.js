@@ -1,7 +1,9 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Board from './Board';
 import {
+    AI_DIFFICULTIES,
     createEmptyBoard,
+    getAIMove,
     getNextPlayer,
     getWinner,
     isDraw,
@@ -11,6 +13,11 @@ import {
 /**
  * @typedef {{board: (null|'X'|'O')[], moveIndex: number, moveSquareIndex: (number|null), player: ('X'|'O'|null)}} HistoryEntry
  */
+
+const GAME_MODES = Object.freeze({
+    LOCAL: 'Local (2 players)',
+    AI: 'Single-player vs AI',
+});
 
 // PUBLIC_INTERFACE
 export default function Game() {
@@ -37,6 +44,14 @@ export default function Game() {
     });
     const [stepIndex, setStepIndex] = useState(0);
 
+    // Mode settings
+    const [mode, setMode] = useState(GAME_MODES.LOCAL);
+    const [aiDifficulty, setAiDifficulty] = useState(AI_DIFFICULTIES.MEDIUM);
+
+    // In single-player mode: human is always X, AI is always O.
+    const humanPlayer = PLAYERS.X;
+    const aiPlayer = PLAYERS.O;
+
     // Persistent-in-session scoreboard (does not reset unless explicitly requested).
     const [scores, setScores] = useState(() => ({
         xWins: 0,
@@ -60,8 +75,14 @@ export default function Game() {
     const draw = useMemo(() => isDraw(board), [board]);
     const gameOver = Boolean(winnerInfo) || draw;
 
-    const canUndo = stepIndex > 0;
-    const canRedo = stepIndex < history.length - 1;
+    const isSinglePlayer = mode === GAME_MODES.AI;
+
+    // In AI mode we disable undo/redo/time travel to avoid inconsistent
+    // interactions (AI would need to recompute and potentially alter history).
+    const canUndo = !isSinglePlayer && stepIndex > 0;
+    const canRedo = !isSinglePlayer && stepIndex < history.length - 1;
+
+    const isViewingLatest = stepIndex === history.length - 1;
 
     /**
      * We must update scores exactly once per finished round.
@@ -72,7 +93,7 @@ export default function Game() {
      */
     const hasCountedResultRef = useRef(false);
 
-    if (gameOver && !hasCountedResultRef.current && stepIndex === history.length - 1) {
+    if (gameOver && !hasCountedResultRef.current && isViewingLatest) {
         hasCountedResultRef.current = true;
 
         setScores((prev) => {
@@ -86,8 +107,12 @@ export default function Game() {
     const status = useMemo(() => {
         if (winnerInfo) return `Winner: ${winnerInfo.winner}`;
         if (draw) return "It's a draw!";
+        if (isSinglePlayer) {
+            if (currentPlayer === humanPlayer) return `Your turn: ${humanPlayer}`;
+            return `AI thinking… (${aiDifficulty})`;
+        }
         return `Turn: ${currentPlayer}`;
-    }, [currentPlayer, draw, winnerInfo]);
+    }, [aiDifficulty, currentPlayer, draw, isSinglePlayer, winnerInfo]);
 
     /**
      * Build the move list UI labels (e.g. "Go to move #3 (X @ 5)").
@@ -110,27 +135,40 @@ export default function Game() {
         });
     }, [history]);
 
-    function handleSquareClick(index) {
-        if (gameOver) return;
-        if (board[index] !== null) return;
-
-        const newBoard = board.slice();
-        newBoard[index] = currentPlayer;
+    function applyMove(index, player) {
+        const nextBoard = board.slice();
+        nextBoard[index] = player;
 
         setHistory((prev) => {
             const trimmed = prev.slice(0, stepIndex + 1);
             const nextEntry = {
-                board: newBoard,
+                board: nextBoard,
                 moveIndex: trimmed.length,
                 moveSquareIndex: index,
-                player: currentPlayer,
+                player,
             };
             return trimmed.concat(nextEntry);
         });
         setStepIndex((prev) => prev + 1);
     }
 
+    function handleSquareClick(index) {
+        if (gameOver) return;
+        if (!isViewingLatest) return; // only allow moves at the head of history
+        if (board[index] !== null) return;
+
+        if (isSinglePlayer) {
+            // Human can only play their own turn.
+            if (currentPlayer !== humanPlayer) return;
+            applyMove(index, humanPlayer);
+            return;
+        }
+
+        applyMove(index, currentPlayer);
+    }
+
     function jumpToStep(nextIndex) {
+        if (isSinglePlayer) return;
         setStepIndex(nextIndex);
     }
 
@@ -159,7 +197,8 @@ export default function Game() {
     }
 
     function newGameSwapStarter() {
-        const nextStarter = getNextPlayer(startingPlayer);
+        // In single-player mode we keep starter fixed as X to avoid confusing assignment.
+        const nextStarter = isSinglePlayer ? PLAYERS.X : getNextPlayer(startingPlayer);
         setStartingPlayer(nextStarter);
         setHistory([
             {
@@ -178,8 +217,119 @@ export default function Game() {
         setScores({ xWins: 0, oWins: 0, draws: 0 });
     }
 
+    function handleModeChange(nextMode) {
+        setMode(nextMode);
+        // Normalize starter for AI mode so the human (X) starts.
+        if (nextMode === GAME_MODES.AI) {
+            setStartingPlayer(PLAYERS.X);
+        }
+        // Reset the board when mode changes to avoid mixing expectations.
+        setHistory([
+            {
+                board: createEmptyBoard(),
+                moveIndex: 0,
+                moveSquareIndex: null,
+                player: null,
+            },
+        ]);
+        setStepIndex(0);
+        hasCountedResultRef.current = false;
+    }
+
+    /**
+     * AI turn runner: after human move (or any time AI is to play), schedule AI response.
+     * We only run AI when:
+     * - single-player mode
+     * - viewing latest step
+     * - game not over
+     * - it's AI's turn
+     */
+    useEffect(() => {
+        if (!isSinglePlayer) return;
+        if (!isViewingLatest) return;
+        if (gameOver) return;
+        if (currentPlayer !== aiPlayer) return;
+
+        const move = getAIMove(board, {
+            aiPlayer,
+            humanPlayer,
+            difficulty: aiDifficulty,
+        });
+
+        if (typeof move !== 'number') return;
+
+        const t = window.setTimeout(() => {
+            // Re-check basic invariants at execution time.
+            setHistory((prevHistory) => {
+                // If anything changed meanwhile, don't apply.
+                // This is a minimal guard for React StrictMode / rapid resets.
+                const last = prevHistory[prevHistory.length - 1];
+                const lastBoard = last.board;
+
+                if (getWinner(lastBoard) || isDraw(lastBoard)) return prevHistory;
+                if (lastBoard[move] !== null) return prevHistory;
+
+                const nextBoard = lastBoard.slice();
+                nextBoard[move] = aiPlayer;
+
+                const nextEntry = {
+                    board: nextBoard,
+                    moveIndex: prevHistory.length,
+                    moveSquareIndex: move,
+                    player: aiPlayer,
+                };
+
+                // Sync stepIndex to the new head.
+                setStepIndex(prevHistory.length);
+
+                return prevHistory.concat(nextEntry);
+            });
+        }, 350);
+
+        return () => window.clearTimeout(t);
+    }, [
+        aiDifficulty,
+        aiPlayer,
+        board,
+        currentPlayer,
+        gameOver,
+        humanPlayer,
+        isSinglePlayer,
+        isViewingLatest,
+    ]);
+
     return (
         <div className="game">
+            <div className="modeRow" aria-label="Game mode">
+                <div className="modePill">
+                    <span className="modeLabel">Mode</span>
+                    <select
+                        className="modeSelect"
+                        value={mode}
+                        onChange={(e) => handleModeChange(e.target.value)}
+                        aria-label="Select game mode"
+                    >
+                        <option value={GAME_MODES.LOCAL}>{GAME_MODES.LOCAL}</option>
+                        <option value={GAME_MODES.AI}>{GAME_MODES.AI}</option>
+                    </select>
+                </div>
+
+                <div className="modePill">
+                    <span className="modeLabel">Difficulty</span>
+                    <select
+                        className="modeSelect"
+                        value={aiDifficulty}
+                        onChange={(e) => setAiDifficulty(e.target.value)}
+                        disabled={!isSinglePlayer}
+                        aria-label="Select AI difficulty"
+                    >
+                        <option value={AI_DIFFICULTIES.EASY}>{AI_DIFFICULTIES.EASY}</option>
+                        <option value={AI_DIFFICULTIES.MEDIUM}>{AI_DIFFICULTIES.MEDIUM}</option>
+                        <option value={AI_DIFFICULTIES.HARD}>{AI_DIFFICULTIES.HARD}</option>
+                    </select>
+                </div>
+            </div>
+
             <div className="scoreRow" aria-label="Scoreboard">
                 <div className="scorePill scoreX">
                     <span className="scoreLabel">X wins</span>
@@ -232,7 +382,7 @@ export default function Game() {
                 board={board}
                 onSquareClick={handleSquareClick}
                 winningLine={winnerInfo?.line ?? null}
-                disabled={gameOver}
+                disabled={gameOver || (isSinglePlayer && currentPlayer === aiPlayer)}
             />
 
             <div className="controls" aria-label="Game controls">
@@ -253,11 +403,7 @@ export default function Game() {
                     Redo
                 </button>
 
-                <button
-                    type="button"
-                    className="btn btnPrimary"
-                    onClick={resetBoardKeepStarter}
-                >
+                <button type="button" className="btn btnPrimary" onClick={resetBoardKeepStarter}>
                     Reset Board
                 </button>
                 <button type="button" className="btn btnGhost" onClick={newGameSwapStarter}>
@@ -281,11 +427,11 @@ export default function Game() {
                         <li key={item.idx} className="historyItem">
                             <button
                                 type="button"
-                                className={
-                                    'historyBtn' + (item.idx === stepIndex ? ' active' : '')
-                                }
+                                className={'historyBtn' + (item.idx === stepIndex ? ' active' : '')}
                                 onClick={() => jumpToStep(item.idx)}
                                 aria-current={item.idx === stepIndex ? 'step' : undefined}
+                                disabled={isSinglePlayer}
+                                title={isSinglePlayer ? 'History disabled in AI mode' : undefined}
                             >
                                 {item.label}
                             </button>
@@ -296,8 +442,17 @@ export default function Game() {
 
             <div className="help">
                 <p className="helpText">
-                    Click an empty square to place your mark. You can’t overwrite a filled
-                    square.
+                    {isSinglePlayer ? (
+                        <>
+                            You are <strong>X</strong>. The AI is <strong>O</strong>. Choose a
+                            difficulty and try to win.
+                        </>
+                    ) : (
+                        <>
+                            Click an empty square to place your mark. You can’t overwrite a filled
+                            square.
+                        </>
+                    )}
                 </p>
             </div>
         </div>

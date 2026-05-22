@@ -109,6 +109,50 @@ body {
   gap: 14px;
 }
 
+.modeRow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modePill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(100, 116, 139, 0.08);
+  border: 1px solid rgba(100, 116, 139, 0.18);
+  box-shadow: var(--shadowSoft);
+}
+
+.modeLabel {
+  color: var(--muted);
+  font-weight: 800;
+  font-size: 0.92rem;
+}
+
+.modeSelect {
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.85);
+  padding: 8px 10px;
+  font-weight: 800;
+  color: rgba(17, 24, 39, 0.9);
+}
+
+.modeSelect:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 5px var(--ring);
+}
+
+.modeSelect:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
 .scoreRow {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

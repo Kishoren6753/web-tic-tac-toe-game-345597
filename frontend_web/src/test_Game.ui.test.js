@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import Game from './components/Game';
 
 function clickSquare(n) {
@@ -9,9 +9,23 @@ function clickSquare(n) {
     return btn;
 }
 
+function setModeToLocal() {
+    fireEvent.change(screen.getByLabelText(/Select game mode/i), {
+        target: { value: 'Local (2 players)' },
+    });
+}
+
+function setModeToAI() {
+    fireEvent.change(screen.getByLabelText(/Select game mode/i), {
+        target: { value: 'Single-player vs AI' },
+    });
+}
+
 describe('Game UI interactions', () => {
-    it('starts with Turn: X and alternates turns on valid moves', () => {
+    it('starts in local mode with Turn: X and alternates turns on valid moves', () => {
         render(<Game />);
+
+        setModeToLocal();
 
         expect(screen.getByText('Turn: X')).toBeTruthy();
 
@@ -24,6 +38,8 @@ describe('Game UI interactions', () => {
 
     it('prevents overwriting an already-filled square', () => {
         render(<Game />);
+
+        setModeToLocal();
 
         clickSquare(1); // X at square 1
         expect(screen.getByLabelText(/Square 1, X/i)).toBeTruthy();
@@ -41,6 +57,8 @@ describe('Game UI interactions', () => {
 
     it('announces a winner and stops accepting moves after game over', () => {
         render(<Game />);
+
+        setModeToLocal();
 
         // X wins top row: 1,2,3 with O playing 4 and 5 in between.
         clickSquare(1); // X
@@ -61,6 +79,8 @@ describe('Game UI interactions', () => {
     it('Reset Board clears the board and keeps the starting player', () => {
         render(<Game />);
 
+        setModeToLocal();
+
         // Make a couple of moves first
         clickSquare(1); // X
         clickSquare(2); // O
@@ -75,8 +95,10 @@ describe('Game UI interactions', () => {
         expect(screen.getByLabelText(/Square 2, empty/i)).toBeTruthy();
     });
 
-    it('New Game (swap starter) swaps the starting player and clears the board', () => {
+    it('New Game (swap starter) swaps the starting player and clears the board (local mode)', () => {
         render(<Game />);
+
+        setModeToLocal();
 
         // Default starting player is X
         expect(screen.getByText('Turn: X')).toBeTruthy();
@@ -95,8 +117,10 @@ describe('Game UI interactions', () => {
         expect(screen.getByLabelText(/Square 1, O/i)).toBeTruthy();
     });
 
-    it('supports undo/redo and updates the board/turn accordingly', () => {
+    it('supports undo/redo in local mode and updates the board/turn accordingly', () => {
         render(<Game />);
+
+        setModeToLocal();
 
         const undo = screen.getByRole('button', { name: /Undo/i });
         const redo = screen.getByRole('button', { name: /Redo/i });
@@ -123,8 +147,10 @@ describe('Game UI interactions', () => {
         expect(screen.getByText('Turn: X')).toBeTruthy();
     });
 
-    it('time travel via move history and truncates future moves when making a new move', () => {
+    it('time travel via move history works in local mode and truncates future moves when making a new move', () => {
         render(<Game />);
+
+        setModeToLocal();
 
         clickSquare(1); // X
         clickSquare(2); // O
@@ -145,5 +171,33 @@ describe('Game UI interactions', () => {
 
         // And the newly placed mark should be present
         expect(screen.getByLabelText(/Square 9, O/i)).toBeTruthy();
+    });
+
+    it('single-player mode: after human plays X, AI responds with O (Easy difficulty)', () => {
+        jest.useFakeTimers();
+
+        render(<Game />);
+
+        setModeToAI();
+
+        // Set difficulty to Easy for deterministic-ish behavior (still random, but must place some O)
+        fireEvent.change(screen.getByLabelText(/Select AI difficulty/i), {
+            target: { value: 'Easy' },
+        });
+
+        // Human plays X
+        clickSquare(1);
+        expect(screen.getByLabelText(/Square 1, X/i)).toBeTruthy();
+
+        // Advance timers to let AI move execute
+        act(() => {
+            jest.advanceTimersByTime(400);
+        });
+
+        // There should now be exactly one O somewhere on the board.
+        const oSquares = screen.queryAllByLabelText(/, O$/i);
+        expect(oSquares.length).toBe(1);
+
+        jest.useRealTimers();
     });
 });
