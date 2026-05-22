@@ -401,6 +401,53 @@ export function getAIMove(board, opts) {
 }
 
 /**
+ * Suggest the best move for a given player.
+ *
+ * Strategy:
+ * 1) If the player can win immediately, suggest that move.
+ * 2) If the opponent can win immediately next turn, suggest a blocking move.
+ * 3) Otherwise, fall back to a minimax best-move for classic 3x3 (k=3),
+ *    or center preference on larger boards, else random.
+ *
+ * This is used by the UI "Hint" feature (not by the AI opponent logic).
+ *
+ * @param {(null|'X'|'O')[]} board
+ * @param {{
+ *  player: 'X'|'O',
+ *  config: {boardSize: number, winLength: number},
+ *  rng?: () => number
+ * }} opts
+ * @returns {number | null}
+ */
+export function getHintMove(board, opts) {
+    const { player, config, rng = Math.random } = opts;
+    const normalized = normalizeGameConfig(config);
+
+    if (getWinner(board, normalized) || isDraw(board, normalized)) return null;
+
+    const opponent = getNextPlayer(player);
+
+    // Win now if possible.
+    const win = findImmediateWinningMove(board, player, normalized);
+    if (typeof win === 'number') return win;
+
+    // Otherwise block opponent's immediate win.
+    const block = findImmediateWinningMove(board, opponent, normalized);
+    if (typeof block === 'number') return block;
+
+    // Classic: use minimax for strongest hint.
+    const isClassic = normalized.boardSize === 3 && normalized.winLength === 3;
+    if (isClassic) return getBestMoveMinimax(board, player, normalized);
+
+    // Prefer center if available for larger boards (good general heuristic).
+    const n = normalized.boardSize;
+    const center = Math.floor((n * n) / 2);
+    if (Number.isInteger(center) && board[center] === null) return center;
+
+    return getRandomMove(board, rng);
+}
+
+/**
  * Utility to format a square label as 1-based row/col for UI/History.
  *
  * @param {number} index
