@@ -1,9 +1,9 @@
 import {
     AI_DIFFICULTIES,
     PLAYERS,
-    WINNING_LINES,
     createEmptyBoard,
     findImmediateWinningMove,
+    generateWinningLines,
     getAIMove,
     getAvailableMoves,
     getBestMoveMinimax,
@@ -11,13 +11,34 @@ import {
     getWinner,
     getRandomMove,
     isDraw,
+    normalizeGameConfig,
 } from './gameLogic';
 
 describe('gameLogic', () => {
+    describe('normalizeGameConfig', () => {
+        it('bounds winLength between 3 and boardSize', () => {
+            expect(normalizeGameConfig({ boardSize: 5, winLength: 99 })).toEqual({
+                boardSize: 5,
+                winLength: 5,
+            });
+
+            expect(normalizeGameConfig({ boardSize: 4, winLength: 2 })).toEqual({
+                boardSize: 4,
+                winLength: 3,
+            });
+        });
+    });
+
     describe('createEmptyBoard', () => {
-        it('creates a 9-length board filled with nulls', () => {
+        it('creates a 3x3 board by default', () => {
             const board = createEmptyBoard();
             expect(board).toHaveLength(9);
+            expect(board.every((x) => x === null)).toBe(true);
+        });
+
+        it('creates an NxN board when boardSize is provided', () => {
+            const board = createEmptyBoard(4);
+            expect(board).toHaveLength(16);
             expect(board.every((x) => x === null)).toBe(true);
         });
 
@@ -38,126 +59,169 @@ describe('gameLogic', () => {
         });
     });
 
-    describe('getWinner', () => {
-        it('returns null for an empty board', () => {
-            expect(getWinner(createEmptyBoard())).toBeNull();
+    describe('generateWinningLines', () => {
+        it('generates 8 lines for classic 3x3 k=3 (same count as standard tic-tac-toe)', () => {
+            const lines = generateWinningLines(3, 3);
+            expect(lines).toHaveLength(8);
         });
 
-        it('detects a winner on a row', () => {
-            const board = createEmptyBoard();
-            board[0] = 'X';
-            board[1] = 'X';
-            board[2] = 'X';
-
-            expect(getWinner(board)).toEqual({ winner: 'X', line: [0, 1, 2] });
-        });
-
-        it('detects a winner on a column', () => {
-            const board = createEmptyBoard();
-            board[0] = 'O';
-            board[3] = 'O';
-            board[6] = 'O';
-
-            expect(getWinner(board)).toEqual({ winner: 'O', line: [0, 3, 6] });
-        });
-
-        it('detects a winner on a diagonal', () => {
-            const board = createEmptyBoard();
-            board[0] = 'X';
-            board[4] = 'X';
-            board[8] = 'X';
-
-            expect(getWinner(board)).toEqual({ winner: 'X', line: [0, 4, 8] });
-        });
-
-        it('returns a line that is one of the declared WINNING_LINES', () => {
-            const board = createEmptyBoard();
-            board[2] = 'O';
-            board[4] = 'O';
-            board[6] = 'O';
-
-            const winnerInfo = getWinner(board);
-            expect(winnerInfo).not.toBeNull();
-            expect(winnerInfo.winner).toBe('O');
-
-            const hasLine = WINNING_LINES.some(
-                (line) => JSON.stringify(line) === JSON.stringify(winnerInfo.line)
-            );
-            expect(hasLine).toBe(true);
+        it('generates lines of correct length for 5x5 k=4', () => {
+            const lines = generateWinningLines(5, 4);
+            expect(lines.length).toBeGreaterThan(0);
+            expect(lines.every((l) => l.length === 4)).toBe(true);
         });
     });
 
-    describe('isDraw', () => {
+    describe('getWinner (dynamic)', () => {
+        it('returns null for an empty board (3x3)', () => {
+            const config = { boardSize: 3, winLength: 3 };
+            expect(getWinner(createEmptyBoard(3), config)).toBeNull();
+        });
+
+        it('detects a winner on a row (4x4, k=4)', () => {
+            const config = { boardSize: 4, winLength: 4 };
+            const board = createEmptyBoard(4);
+            board[4] = 'X';
+            board[5] = 'X';
+            board[6] = 'X';
+            board[7] = 'X';
+
+            expect(getWinner(board, config)).toEqual({ winner: 'X', line: [4, 5, 6, 7] });
+        });
+
+        it('detects a winner on a column (5x5, k=4)', () => {
+            const config = { boardSize: 5, winLength: 4 };
+            const board = createEmptyBoard(5);
+
+            // Column 2 (0-based col=1), rows 1..4 (0-based r=1..4) but k=4: r=1..4 => indices: 6,11,16,21
+            board[6] = 'O';
+            board[11] = 'O';
+            board[16] = 'O';
+            board[21] = 'O';
+
+            expect(getWinner(board, config)).toEqual({ winner: 'O', line: [6, 11, 16, 21] });
+        });
+
+        it('detects a winner on a diagonal (4x4, k=3)', () => {
+            const config = { boardSize: 4, winLength: 3 };
+            const board = createEmptyBoard(4);
+
+            // Down-right diagonal segment starting at (row=0,col=1): indices 1,6,11
+            board[1] = 'X';
+            board[6] = 'X';
+            board[11] = 'X';
+
+            expect(getWinner(board, config)).toEqual({ winner: 'X', line: [1, 6, 11] });
+        });
+    });
+
+    describe('isDraw (dynamic)', () => {
         it('is false when the board is not full', () => {
-            const board = createEmptyBoard();
+            const config = { boardSize: 3, winLength: 3 };
+            const board = createEmptyBoard(3);
             board[0] = 'X';
-            expect(isDraw(board)).toBe(false);
+            expect(isDraw(board, config)).toBe(false);
         });
 
-        it('is false when there is a winner even if the board is full', () => {
-            // A full board with a winner (top row X)
-            const board = ['X', 'X', 'X', 'O', 'O', 'X', 'O', 'X', 'O'];
-            expect(getWinner(board)).toEqual({ winner: 'X', line: [0, 1, 2] });
-            expect(isDraw(board)).toBe(false);
-        });
-
-        it('is true when the board is full and there is no winner', () => {
-            // Classic draw position (no 3-in-a-row)
+        it('is true when the board is full and there is no winner (3x3 classic)', () => {
+            const config = { boardSize: 3, winLength: 3 };
             const board = ['X', 'O', 'X', 'X', 'O', 'O', 'O', 'X', 'X'];
-            expect(getWinner(board)).toBeNull();
-            expect(isDraw(board)).toBe(true);
+            expect(getWinner(board, config)).toBeNull();
+            expect(isDraw(board, config)).toBe(true);
         });
     });
 
     describe('AI helpers', () => {
-        it('getAvailableMoves returns all empty indices', () => {
-            const board = createEmptyBoard();
+        it('getAvailableMoves returns all empty indices (4x4)', () => {
+            const board = createEmptyBoard(4);
             board[0] = 'X';
-            board[4] = 'O';
-            expect(getAvailableMoves(board)).toEqual([1, 2, 3, 5, 6, 7, 8]);
+            board[5] = 'O';
+            const moves = getAvailableMoves(board);
+            expect(moves.includes(0)).toBe(false);
+            expect(moves.includes(5)).toBe(false);
+            expect(moves.length).toBe(14);
         });
 
-        it('getRandomMove returns null when no moves left', () => {
+        it('getRandomMove returns null when no moves left (3x3)', () => {
             const board = ['X', 'O', 'X', 'X', 'O', 'O', 'O', 'X', 'X'];
             expect(getRandomMove(board, () => 0.5)).toBeNull();
         });
 
-        it('findImmediateWinningMove finds a direct win', () => {
-            // X can win by playing index 2.
-            const board = ['X', 'X', null, null, 'O', null, null, null, 'O'];
-            expect(findImmediateWinningMove(board, 'X')).toBe(2);
+        it('findImmediateWinningMove finds a direct win (4x4, k=4)', () => {
+            const config = { boardSize: 4, winLength: 4 };
+
+            // X can win by playing index 3 to complete [0,1,2,3]
+            const board = createEmptyBoard(4);
+            board[0] = 'X';
+            board[1] = 'X';
+            board[2] = 'X';
+            board[3] = null;
+
+            expect(findImmediateWinningMove(board, 'X', config)).toBe(3);
         });
 
-        it('getAIMove (Medium) blocks immediate opponent win when it cannot win itself', () => {
-            // X is about to win at index 2; O must block at 2.
-            const board = ['X', 'X', null, null, 'O', null, null, null, null];
+        it('getAIMove (Medium) blocks immediate opponent win (4x4, k=4)', () => {
+            const config = { boardSize: 4, winLength: 4 };
+
+            // X about to win at index 3; O must block at 3
+            const board = createEmptyBoard(4);
+            board[0] = 'X';
+            board[1] = 'X';
+            board[2] = 'X';
+
             const move = getAIMove(board, {
                 aiPlayer: 'O',
                 humanPlayer: 'X',
                 difficulty: AI_DIFFICULTIES.MEDIUM,
                 rng: () => 0,
+                config,
             });
-            expect(move).toBe(2);
+            expect(move).toBe(3);
         });
 
-        it('getBestMoveMinimax returns null on finished games', () => {
+        it('getBestMoveMinimax returns null on finished games (classic)', () => {
+            const config = { boardSize: 3, winLength: 3 };
+
             const wonBoard = ['X', 'X', 'X', null, 'O', null, null, null, 'O'];
-            expect(getBestMoveMinimax(wonBoard, 'O')).toBeNull();
+            expect(getBestMoveMinimax(wonBoard, 'O', config)).toBeNull();
 
             const drawBoard = ['X', 'O', 'X', 'X', 'O', 'O', 'O', 'X', 'X'];
-            expect(getBestMoveMinimax(drawBoard, 'O')).toBeNull();
+            expect(getBestMoveMinimax(drawBoard, 'O', config)).toBeNull();
         });
 
-        it('getAIMove (Hard) returns a legal move on a non-terminal board', () => {
+        it('getAIMove (Hard) returns a legal move on a non-terminal board (classic)', () => {
+            const config = { boardSize: 3, winLength: 3 };
+
             const board = ['X', null, null, null, 'O', null, null, null, null];
             const move = getAIMove(board, {
                 aiPlayer: 'O',
                 humanPlayer: 'X',
                 difficulty: AI_DIFFICULTIES.HARD,
+                config,
             });
             expect(typeof move === 'number').toBe(true);
             expect(move).toBeGreaterThanOrEqual(0);
             expect(move).toBeLessThan(9);
+            expect(board[move]).toBeNull();
+        });
+
+        it('getAIMove (Hard) falls back to a legal move for larger boards', () => {
+            const config = { boardSize: 5, winLength: 4 };
+            const board = createEmptyBoard(5);
+            board[0] = 'X';
+            board[6] = 'O';
+
+            const move = getAIMove(board, {
+                aiPlayer: 'O',
+                humanPlayer: 'X',
+                difficulty: AI_DIFFICULTIES.HARD,
+                rng: () => 0,
+                config,
+            });
+
+            expect(typeof move === 'number').toBe(true);
+            expect(move).toBeGreaterThanOrEqual(0);
+            expect(move).toBeLessThan(25);
             expect(board[move]).toBeNull();
         });
     });

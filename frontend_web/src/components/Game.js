@@ -2,16 +2,24 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Board from './Board';
 import {
     AI_DIFFICULTIES,
+    DEFAULT_GAME_CONFIG,
     createEmptyBoard,
+    formatSquarePosition,
     getAIMove,
     getNextPlayer,
     getWinner,
     isDraw,
+    normalizeGameConfig,
     PLAYERS,
 } from '../gameLogic';
 
 /**
- * @typedef {{board: (null|'X'|'O')[], moveIndex: number, moveSquareIndex: (number|null), player: ('X'|'O'|null)}} HistoryEntry
+ * @typedef {{
+ *  board: (null|'X'|'O')[],
+ *  moveIndex: number,
+ *  moveSquareIndex: (number|null),
+ *  player: ('X'|'O'|null)
+ * }} HistoryEntry
  */
 
 const GAME_MODES = Object.freeze({
@@ -22,6 +30,10 @@ const GAME_MODES = Object.freeze({
 // PUBLIC_INTERFACE
 export default function Game() {
     /** This is the main interactive game component. */
+
+    const [config, setConfig] = useState(() => normalizeGameConfig(DEFAULT_GAME_CONFIG));
+    const boardSize = config.boardSize;
+    const winLength = config.winLength;
 
     /**
      * History model:
@@ -34,7 +46,7 @@ export default function Game() {
         /** @type {HistoryEntry[]} */
         const initial = [
             {
-                board: createEmptyBoard(),
+                board: createEmptyBoard(boardSize),
                 moveIndex: 0,
                 moveSquareIndex: null,
                 player: null,
@@ -71,8 +83,8 @@ export default function Game() {
         return turnsFromStart === 0 ? PLAYERS.O : PLAYERS.X;
     }, [startingPlayer, stepIndex]);
 
-    const winnerInfo = useMemo(() => getWinner(board), [board]);
-    const draw = useMemo(() => isDraw(board), [board]);
+    const winnerInfo = useMemo(() => getWinner(board, config), [board, config]);
+    const draw = useMemo(() => isDraw(board, config), [board, config]);
     const gameOver = Boolean(winnerInfo) || draw;
 
     const isSinglePlayer = mode === GAME_MODES.AI;
@@ -112,10 +124,10 @@ export default function Game() {
             return `AI thinking… (${aiDifficulty})`;
         }
         return `Turn: ${currentPlayer}`;
-    }, [aiDifficulty, currentPlayer, draw, isSinglePlayer, winnerInfo]);
+    }, [aiDifficulty, currentPlayer, draw, humanPlayer, isSinglePlayer, winnerInfo]);
 
     /**
-     * Build the move list UI labels (e.g. "Go to move #3 (X @ 5)").
+     * Build the move list UI labels (e.g. "Go to move #3 (X @ r2c1)").
      */
     const moveItems = useMemo(() => {
         return history.map((entry, idx) => {
@@ -127,13 +139,14 @@ export default function Game() {
             }
             const player = entry.player;
             const square = entry.moveSquareIndex;
-            const squareHuman = typeof square === 'number' ? square + 1 : '?';
+            const squareHuman =
+                typeof square === 'number' ? formatSquarePosition(square, boardSize) : '?';
             return {
                 idx,
                 label: `Go to move #${idx} (${player} @ ${squareHuman})`,
             };
         });
-    }, [history]);
+    }, [boardSize, history]);
 
     function applyMove(index, player) {
         const nextBoard = board.slice();
@@ -185,7 +198,7 @@ export default function Game() {
     function resetBoardKeepStarter() {
         setHistory([
             {
-                board: createEmptyBoard(),
+                board: createEmptyBoard(boardSize),
                 moveIndex: 0,
                 moveSquareIndex: null,
                 player: null,
@@ -202,7 +215,7 @@ export default function Game() {
         setStartingPlayer(nextStarter);
         setHistory([
             {
-                board: createEmptyBoard(),
+                board: createEmptyBoard(boardSize),
                 moveIndex: 0,
                 moveSquareIndex: null,
                 player: null,
@@ -226,7 +239,7 @@ export default function Game() {
         // Reset the board when mode changes to avoid mixing expectations.
         setHistory([
             {
-                board: createEmptyBoard(),
+                board: createEmptyBoard(boardSize),
                 moveIndex: 0,
                 moveSquareIndex: null,
                 player: null,
@@ -234,6 +247,28 @@ export default function Game() {
         ]);
         setStepIndex(0);
         hasCountedResultRef.current = false;
+    }
+
+    function resetForConfigChange(nextConfig) {
+        const normalized = normalizeGameConfig(nextConfig);
+        setConfig(normalized);
+
+        // Reset the round (board size changes invalidate history).
+        setHistory([
+            {
+                board: createEmptyBoard(normalized.boardSize),
+                moveIndex: 0,
+                moveSquareIndex: null,
+                player: null,
+            },
+        ]);
+        setStepIndex(0);
+        hasCountedResultRef.current = false;
+
+        // Keep starter semantics; for AI always keep X.
+        if (mode === GAME_MODES.AI) {
+            setStartingPlayer(PLAYERS.X);
+        }
     }
 
     /**
@@ -254,6 +289,7 @@ export default function Game() {
             aiPlayer,
             humanPlayer,
             difficulty: aiDifficulty,
+            config,
         });
 
         if (typeof move !== 'number') return;
@@ -266,7 +302,7 @@ export default function Game() {
                 const last = prevHistory[prevHistory.length - 1];
                 const lastBoard = last.board;
 
-                if (getWinner(lastBoard) || isDraw(lastBoard)) return prevHistory;
+                if (getWinner(lastBoard, config) || isDraw(lastBoard, config)) return prevHistory;
                 if (lastBoard[move] !== null) return prevHistory;
 
                 const nextBoard = lastBoard.slice();
@@ -291,6 +327,7 @@ export default function Game() {
         aiDifficulty,
         aiPlayer,
         board,
+        config,
         currentPlayer,
         gameOver,
         humanPlayer,
@@ -300,7 +337,7 @@ export default function Game() {
 
     return (
         <div className="game">
-            <div className="modeRow" aria-label="Game mode">
+            <div className="modeRow" aria-label="Game settings">
                 <div className="modePill">
                     <span className="modeLabel">Mode</span>
                     <select
@@ -326,6 +363,48 @@ export default function Game() {
                         <option value={AI_DIFFICULTIES.EASY}>{AI_DIFFICULTIES.EASY}</option>
                         <option value={AI_DIFFICULTIES.MEDIUM}>{AI_DIFFICULTIES.MEDIUM}</option>
                         <option value={AI_DIFFICULTIES.HARD}>{AI_DIFFICULTIES.HARD}</option>
+                    </select>
+                </div>
+
+                <div className="modePill">
+                    <span className="modeLabel">Board</span>
+                    <select
+                        className="modeSelect"
+                        value={boardSize}
+                        onChange={(e) =>
+                            resetForConfigChange({
+                                boardSize: Number(e.target.value),
+                                winLength,
+                            })
+                        }
+                        aria-label="Select board size"
+                    >
+                        <option value={3}>3 x 3</option>
+                        <option value={4}>4 x 4</option>
+                        <option value={5}>5 x 5</option>
+                    </select>
+                </div>
+
+                <div className="modePill">
+                    <span className="modeLabel">Win</span>
+                    <select
+                        className="modeSelect"
+                        value={winLength}
+                        onChange={(e) =>
+                            resetForConfigChange({
+                                boardSize,
+                                winLength: Number(e.target.value),
+                            })
+                        }
+                        aria-label="Select win length"
+                    >
+                        {Array.from({ length: Math.max(1, boardSize - 2) }, (_, i) => i + 3).map(
+                            (k) => (
+                                <option key={k} value={k}>
+                                    {k} in a row
+                                </option>
+                            )
+                        )}
                     </select>
                 </div>
             </div>
@@ -361,16 +440,14 @@ export default function Game() {
                 <div className="playerBadges" aria-label="Players">
                     <span
                         className={
-                            'playerBadge ' +
-                            (currentPlayer === PLAYERS.X && !gameOver ? 'activeX' : '')
+                            'playerBadge ' + (currentPlayer === PLAYERS.X && !gameOver ? 'activeX' : '')
                         }
                     >
                         X
                     </span>
                     <span
                         className={
-                            'playerBadge ' +
-                            (currentPlayer === PLAYERS.O && !gameOver ? 'activeO' : '')
+                            'playerBadge ' + (currentPlayer === PLAYERS.O && !gameOver ? 'activeO' : '')
                         }
                     >
                         O
@@ -380,6 +457,7 @@ export default function Game() {
 
             <Board
                 board={board}
+                boardSize={boardSize}
                 onSquareClick={handleSquareClick}
                 winningLine={winnerInfo?.line ?? null}
                 disabled={gameOver || (isSinglePlayer && currentPlayer === aiPlayer)}
@@ -452,7 +530,11 @@ export default function Game() {
                             Click an empty square to place your mark. You can’t overwrite a filled
                             square.
                         </>
-                    )}
+                    )}{' '}
+                    <span className="helpMeta">
+                        Current rules: <strong>{boardSize}×{boardSize}</strong>, win by getting{' '}
+                        <strong>{winLength}</strong> in a row.
+                    </span>
                 </p>
             </div>
         </div>

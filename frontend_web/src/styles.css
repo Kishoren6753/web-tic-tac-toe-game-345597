@@ -17,6 +17,7 @@
   --radiusSm: 14px;
   --radiusXs: 12px;
 
+  /* Default square size; board uses --boardSize to compute its overall footprint. */
   --square: 92px;
 }
 
@@ -256,12 +257,26 @@ body {
   place-items: center;
 }
 
+/*
+  Board uses a CSS custom property set from React:
+  --boardSize: number of columns/rows.
+*/
 .board {
-  width: calc(var(--square) * 3 + 18px);
+  --boardSize: 3;
+
+  /* Responsive square sizing:
+     - keep a nice desktop size,
+     - but shrink so even 5x5 fits the shell on smaller screens. */
+  --gap: 9px;
+  --pad: 14px;
+
+  --squareResponsive: min(var(--square), calc((min(100vw, 560px) - 92px - (2 * var(--pad)) - ((var(--boardSize) - 1) * var(--gap))) / var(--boardSize)));
+
+  width: calc(var(--squareResponsive) * var(--boardSize) + ((var(--boardSize) - 1) * var(--gap)) + (2 * var(--pad)));
   display: grid;
-  grid-template-columns: repeat(3, var(--square));
-  gap: 9px;
-  padding: 14px;
+  grid-template-columns: repeat(var(--boardSize), var(--squareResponsive));
+  gap: var(--gap);
+  padding: var(--pad);
   border-radius: 22px;
   background: rgba(255, 255, 255, 0.85);
   border: 1px solid rgba(148, 163, 184, 0.35);
@@ -269,8 +284,8 @@ body {
 }
 
 .square {
-  width: var(--square);
-  height: var(--square);
+  width: var(--squareResponsive);
+  height: var(--squareResponsive);
   border-radius: var(--radiusSm);
   border: 1px solid rgba(148, 163, 184, 0.35);
   background: linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(248, 250, 252, 1));
@@ -376,6 +391,11 @@ body {
   line-height: 1.35;
 }
 
+.helpMeta {
+  display: inline-block;
+  margin-left: 6px;
+}
+
 /* Move history */
 .historyPanel {
   background: rgba(255, 255, 255, 0.75);
@@ -459,5 +479,9 @@ body {
 
   .shell {
     padding: 18px 14px 16px;
+  }
+
+  .mark {
+    font-size: 2.05rem;
   }
 }
